@@ -130,6 +130,28 @@ int tls_setup(int fd)
 	return 0;
 }
 
+K_THREAD_STACK_DEFINE(stack_gnss, 1024);
+struct k_thread thread_data_gnss;
+#define THREAD_PRIORITY_GNSS 5
+
+void entrypoint_gnss(void *arg1, void *arg2, void *arg3)
+{
+	while(1)
+	{
+		printk("Running GNSS Thread\n");
+		k_sleep(K_SECONDS(10));
+	}
+}
+
+void create_gnss_thread()
+{
+    k_tid_t tid_mqtt = k_thread_create(&thread_data_gnss, stack_gnss,
+                                 K_THREAD_STACK_SIZEOF(stack_gnss),
+                                 entrypoint_gnss,
+                                 NULL, NULL, NULL,
+                                 THREAD_PRIORITY_GNSS, 0, K_NO_WAIT);
+}
+
 void main(void)
 {
 	int err;
@@ -255,15 +277,16 @@ void main(void)
 	};
 	struct rest_client_resp_context resp;
 	memset(&resp, 0, sizeof(resp));
-	int ret = rest_client_request(&req_ctx, &resp);
-	if(resp.response != NULL)
+
+	create_gnss_thread();
+	while (true)	
 	{
-		printk("response %s\n", resp.response);
+		printk("Wake up every 10\n");
+		k_sleep(K_SECONDS(10));
 	}
-	printk("Got return code %d\n", ret);	
-	printk("Finished, closing socket.\n");
 
 clean_up:
+	printk("Finished, closing socket.\n");
 	if (res != 0)
 	{
 		freeaddrinfo(res);
