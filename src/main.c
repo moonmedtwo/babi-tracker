@@ -12,10 +12,16 @@
 #include <zephyr/net/tls_credentials.h>
 #include <modem/lte_lc.h>
 #include <modem/modem_key_mgmt.h>
+#include <net/rest_client.h>
 
 #define HTTPS_PORT 443
 
+#define REST_API
+#ifdef REST_API 
+#define HTTPS_HOSTNAME "consumer-dev.itspersonalservices.com"
+#else
 #define HTTPS_HOSTNAME "example.com"
+#endif
 
 #define HTTP_HEAD                                                              \
 	"HEAD / HTTP/1.1\r\n"                                                  \
@@ -112,7 +118,7 @@ int tls_setup(int fd)
 		REQUIRED = 2,
 	};
 
-	verify = REQUIRED;
+	verify = NONE;
 
 	err = setsockopt(fd, SOL_TLS, TLS_PEER_VERIFY, &verify, sizeof(verify));
 	if (err) {
@@ -145,7 +151,28 @@ void main(void)
 	char *p;
 	int bytes;
 	size_t off;
-	struct addrinfo *res;
+	struct addrinfo *res = 0;
+	struct sockaddr server_sockaddr = {
+		.sa_family = 1,
+		.data = {
+			0, 0, 
+			3, 227, 167, 28, // itspersonal
+			// 93, 184, 216, 34, // example.com
+			2, 0, 216, 0,
+			19, 0, 19, 0, 
+			0, 0, 0, 0, 0, 0, 0, 0
+		}
+	};
+
+	struct addrinfo server_addrinfo = {
+		.ai_next = 0,
+		.ai_family = AF_INET,
+		.ai_socktype = SOCK_STREAM,
+		.ai_protocol = 6,
+		.ai_addrlen = 8,
+		.ai_addr = &server_sockaddr,
+	};
+
 	struct addrinfo hints = {
 		.ai_family = AF_INET,
 		.ai_socktype = SOCK_STREAM,
@@ -162,19 +189,43 @@ void main(void)
 #endif
 
 	printk("Waiting for network.. ");
-	err = lte_lc_init_and_connect();
-	if (err) {
-		printk("Failed to connect to the LTE network, err %d\n", err);
-		return;
+	if (IS_ENABLED(CONFIG_LTE_AUTO_INIT_AND_CONNECT))
+	{
+		nrf_modem_at_printf("AT+COPS=1,2\"45202\"");
 	}
+	else
+	{
+		err = lte_lc_init_and_connect();
+		if (err) {
+			printk("Failed to connect to the LTE network, err %d\n", err);
+			return;
+		}
+	}
+
 	printk("OK\n");
 
-	err = getaddrinfo(HTTPS_HOSTNAME, NULL, &hints, &res);
-	if (err) {
-		printk("getaddrinfo() failed, err %d\n", errno);
-		return;
+	struct nrf_in_addr dns;
+	dns.s_addr = 134744072; // Google DNS, 8.8.8.8
+	const int dns_err = nrf_setdnsaddr(NRF_AF_INET, &dns, sizeof(dns));
+	printk("DNS set result %d\n", dns_err);
+
+	if (1)
+	{
+		printk("getaddrinfo of %s\n", HTTPS_HOSTNAME);
+		err = getaddrinfo(HTTPS_HOSTNAME, NULL, &hints, &res);
+		if (err) {
+			printk("getaddrinfo() of %s failed, err %d\n",HTTPS_HOSTNAME, errno);
+			return;
+		}
+	}
+	else
+	{
+		printk("use cached addrinfo\n");
+		res = &server_addrinfo;
+		res->ai_next = 0;
 	}
 
+	char* ip = &res->ai_addr->data[2];
 	((struct sockaddr_in *)res->ai_addr)->sin_port = htons(HTTPS_PORT);
 
 	if (IS_ENABLED(CONFIG_SAMPLE_TFM_MBEDTLS)) {
@@ -193,13 +244,15 @@ void main(void)
 		goto clean_up;
 	}
 
-	printk("Connecting to %s\n", HTTPS_HOSTNAME);
+	printk("Connecting to %d.%d.%d.%d\n", ip[0], ip[1], ip[2], ip[3]);
 	err = connect(fd, res->ai_addr, sizeof(struct sockaddr_in));
 	if (err) {
 		printk("connect() failed, err: %d\n", errno);
 		goto clean_up;
 	}
+	printk("Connected\n");
 
+#ifndef REST_API
 	off = 0;
 	do {
 		bytes = send(fd, &send_buf[off], HTTP_HEAD_LEN - off, 0);
@@ -238,12 +291,66 @@ void main(void)
 		recv_buf[off + 1] = '\0';
 		printk("\n>\t %s\n\n", recv_buf);
 	}
-
+#else
+	struct rest_client_req_context req_ctx = {
+		/** Socket identifier for the connection. When using the default value,
+		 *  the library will open a new socket connection. Default: REST_CLIENT_SCKT_CONNECT.
+		 */
+		.connect_socket = fd,
+		/** Defines whether the connection should remain after API call. Default: false. */
+		.keep_alive = true,
+		/** Security tag. Default: REST_CLIENT_SEC_TAG_NO_SEC. */
+		.sec_tag = TLS_SEC_TAG,
+		/** Indicates the preference for peer verification.
+		 *  Initialize to REST_CLIENT_TLS_DEFAULT_PEER_VERIFY
+		 *  and the default (TLS_PEER_VERIFY_REQUIRED) is used.
+		 */
+		.tls_peer_verify = 0, // No build verification
+		/** Used HTTP method. */
+		.http_method = HTTP_PUT,
+		/** Hostname or IP address to be used in the request. */
+		.host = HTTPS_HOSTNAME,
+		/** Port number to be used in the request. */
+		.port = 443,
+		/** The URL for this request, for example: /index.html */
+		.url = "/api/v1/devices/battery",
+		/** The HTTP header fields. Similar to the Zephyr HTTP client.
+		 *  This is a NULL-terminated list of header fields. May be NULL.
+		 */
+		.header_fields = NULL,
+		/** Payload/body, may be NULL. */
+		.body = NULL,
+		/** User-defined timeout value for REST request. The timeout is set individually
+		 *  for socket connection creation and data transfer meaning REST request can take
+		 *  longer than this given timeout. To disable, set the timeout duration to SYS_FOREVER_MS.
+		 *  A value of zero will result in an immediate timeout.
+		 *  Default: CONFIG_REST_CLIENT_REST_REQUEST_TIMEOUT.
+		 */
+		.timeout_ms = 30000,
+		/** User-allocated buffer for receiving API response. */
+		.resp_buff = recv_buf,
+		/** User-defined size of resp_buff. */
+		.resp_buff_len = RECV_BUF_SIZE,
+	};
+	struct rest_client_resp_context resp;
+	memset(&resp, 0, sizeof(resp));
+	int ret = rest_client_request(&req_ctx, &resp);
+	if(resp.response != NULL)
+	{
+		printk("response %s\n", resp.response);
+	}
+	printk("Got return code %d\n", ret);	
+#endif
 	printk("Finished, closing socket.\n");
 
 clean_up:
-	freeaddrinfo(res);
+
+	if (res != 0 && res != &server_addrinfo)
+	{
+		freeaddrinfo(res);
+	}
 	(void)close(fd);
 
 	lte_lc_power_off();
+	printk("Cleaned up, shutting down ...\n");
 }
