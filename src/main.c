@@ -13,29 +13,15 @@
 #include <modem/lte_lc.h>
 #include <modem/modem_key_mgmt.h>
 #include <net/rest_client.h>
+#include "commit_hash.h"
 
 #define HTTPS_PORT 443
 
-#define REST_API
-#ifdef REST_API 
 #define HTTPS_HOSTNAME "consumer-dev.itspersonalservices.com"
-#else
-#define HTTPS_HOSTNAME "example.com"
-#endif
-
-#define HTTP_HEAD                                                              \
-	"HEAD / HTTP/1.1\r\n"                                                  \
-	"Host: " HTTPS_HOSTNAME ":443\r\n"                                     \
-	"Connection: close\r\n\r\n"
-
-#define HTTP_HEAD_LEN (sizeof(HTTP_HEAD) - 1)
-
-#define HTTP_HDR_END "\r\n\r\n"
 
 #define RECV_BUF_SIZE 2048
 #define TLS_SEC_TAG 42
 
-static const char send_buf[] = HTTP_HEAD;
 static char recv_buf[RECV_BUF_SIZE];
 
 /* Certificate for `example.com` */
@@ -152,33 +138,13 @@ void main(void)
 	int bytes;
 	size_t off;
 	struct addrinfo *res = 0;
-	struct sockaddr server_sockaddr = {
-		.sa_family = 1,
-		.data = {
-			0, 0, 
-			3, 227, 167, 28, // itspersonal
-			// 93, 184, 216, 34, // example.com
-			2, 0, 216, 0,
-			19, 0, 19, 0, 
-			0, 0, 0, 0, 0, 0, 0, 0
-		}
-	};
-
-	struct addrinfo server_addrinfo = {
-		.ai_next = 0,
-		.ai_family = AF_INET,
-		.ai_socktype = SOCK_STREAM,
-		.ai_protocol = 6,
-		.ai_addrlen = 8,
-		.ai_addr = &server_sockaddr,
-	};
 
 	struct addrinfo hints = {
 		.ai_family = AF_INET,
 		.ai_socktype = SOCK_STREAM,
 	};
 
-	printk("HTTPS client sample started\n\r");
+	printk("Build %s\n", HASH);
 
 #if !defined(CONFIG_SAMPLE_TFM_MBEDTLS)
 	/* Provision certificates before connecting to the LTE network */
@@ -204,30 +170,23 @@ void main(void)
 
 	printk("OK\n");
 
+	/* Setting google dns to resolve the hostname */
 	struct nrf_in_addr dns;
 	dns.s_addr = 134744072; // Google DNS, 8.8.8.8
 	const int dns_err = nrf_setdnsaddr(NRF_AF_INET, &dns, sizeof(dns));
 	printk("DNS set result %d\n", dns_err);
 
-	if (1)
-	{
-		printk("getaddrinfo of %s\n", HTTPS_HOSTNAME);
-		err = getaddrinfo(HTTPS_HOSTNAME, NULL, &hints, &res);
-		if (err) {
-			printk("getaddrinfo() of %s failed, err %d\n",HTTPS_HOSTNAME, errno);
-			return;
-		}
-	}
-	else
-	{
-		printk("use cached addrinfo\n");
-		res = &server_addrinfo;
-		res->ai_next = 0;
+	/* Resolve the hostname into IP address */
+	printk("getaddrinfo of %s\n", HTTPS_HOSTNAME);
+	err = getaddrinfo(HTTPS_HOSTNAME, NULL, &hints, &res);
+	if (err) {
+		printk("getaddrinfo() of %s failed, err %d\n",HTTPS_HOSTNAME, errno);
+		return;
 	}
 
-	char* ip = &res->ai_addr->data[2];
 	((struct sockaddr_in *)res->ai_addr)->sin_port = htons(HTTPS_PORT);
-
+	
+	/* Try to open the socket with tls protocol enabled */
 	if (IS_ENABLED(CONFIG_SAMPLE_TFM_MBEDTLS)) {
 		fd = socket(AF_INET, SOCK_STREAM | SOCK_NATIVE_TLS, IPPROTO_TLS_1_2);
 	} else {
@@ -244,6 +203,8 @@ void main(void)
 		goto clean_up;
 	}
 
+	/* Connecting to the host with provided socket */
+	char* ip = &res->ai_addr->data[2];
 	printk("Connecting to %d.%d.%d.%d\n", ip[0], ip[1], ip[2], ip[3]);
 	err = connect(fd, res->ai_addr, sizeof(struct sockaddr_in));
 	if (err) {
@@ -252,46 +213,6 @@ void main(void)
 	}
 	printk("Connected\n");
 
-#ifndef REST_API
-	off = 0;
-	do {
-		bytes = send(fd, &send_buf[off], HTTP_HEAD_LEN - off, 0);
-		if (bytes < 0) {
-			printk("send() failed, err %d\n", errno);
-			goto clean_up;
-		}
-		off += bytes;
-	} while (off < HTTP_HEAD_LEN);
-
-	printk("Sent %d bytes\n", off);
-
-	off = 0;
-	do {
-		bytes = recv(fd, &recv_buf[off], RECV_BUF_SIZE - off, 0);
-		if (bytes < 0) {
-			printk("recv() failed, err %d\n", errno);
-			goto clean_up;
-		}
-		off += bytes;
-	} while (bytes != 0 /* peer closed connection */);
-
-	printk("Received %d bytes\n", off);
-
-	/* Make sure recv_buf is NULL terminated (for safe use with strstr) */
-	if (off < sizeof(recv_buf)) {
-		recv_buf[off] = '\0';
-	} else {
-		recv_buf[sizeof(recv_buf) - 1] = '\0';
-	}
-
-	/* Print HTTP response */
-	p = strstr(recv_buf, "\r\n");
-	if (p) {
-		off = p - recv_buf;
-		recv_buf[off + 1] = '\0';
-		printk("\n>\t %s\n\n", recv_buf);
-	}
-#else
 	struct rest_client_req_context req_ctx = {
 		/** Socket identifier for the connection. When using the default value,
 		 *  the library will open a new socket connection. Default: REST_CLIENT_SCKT_CONNECT.
@@ -311,7 +232,7 @@ void main(void)
 		/** Hostname or IP address to be used in the request. */
 		.host = HTTPS_HOSTNAME,
 		/** Port number to be used in the request. */
-		.port = 443,
+		.port = HTTPS_PORT,
 		/** The URL for this request, for example: /index.html */
 		.url = "/api/v1/devices/battery",
 		/** The HTTP header fields. Similar to the Zephyr HTTP client.
@@ -340,12 +261,10 @@ void main(void)
 		printk("response %s\n", resp.response);
 	}
 	printk("Got return code %d\n", ret);	
-#endif
 	printk("Finished, closing socket.\n");
 
 clean_up:
-
-	if (res != 0 && res != &server_addrinfo)
+	if (res != 0)
 	{
 		freeaddrinfo(res);
 	}
