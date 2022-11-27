@@ -14,8 +14,12 @@
 #include <modem/modem_key_mgmt.h>
 #include <net/rest_client.h>
 #include "commit_hash.h"
+#include <cJSON.h>
 
 LOG_MODULE_REGISTER(App, 3);
+
+#define ENDPOINT_BATTERY "/api/v1/devices/battery"
+#define ENDPOINT_LOCATION "/api/v1/devices/location"
 
 #define HTTPS_PORT 443
 
@@ -135,6 +139,8 @@ int tls_setup(int fd)
 extern volatile double last_latitude;
 extern volatile double last_longtitude;
 
+static uint8_t msg_buffer[128];
+
 K_THREAD_STACK_DEFINE(stack_gnss, 4096);
 struct k_thread thread_data_gnss;
 #define THREAD_PRIORITY_GNSS 5
@@ -150,11 +156,98 @@ void create_gnss_thread()
                                  THREAD_PRIORITY_GNSS, 0, K_NO_WAIT);
 }
 
-void app_main_handler(struct rest_client_req_context * req_ctx, struct rest_client_resp_context *rsp_ctx)
+void app_main_handler(int socket)
 {
+	struct rest_client_req_context req_ctx = {
+		/** Socket identifier for the connection. When using the default value,
+		 *  the library will open a new socket connection. Default: REST_CLIENT_SCKT_CONNECT.
+		 */
+		.connect_socket = socket,
+		/** Defines whether the connection should remain after API call. Default: false. */
+		.keep_alive = true,
+		/** Security tag. Default: REST_CLIENT_SEC_TAG_NO_SEC. */
+		.sec_tag = TLS_SEC_TAG,
+		/** Indicates the preference for peer verification.
+		 *  Initialize to REST_CLIENT_TLS_DEFAULT_PEER_VERIFY
+		 *  and the default (TLS_PEER_VERIFY_REQUIRED) is used.
+		 */
+		.tls_peer_verify = 0, // No build verification
+		/** Used HTTP method. */
+		.http_method = HTTP_PUT,
+		/** Hostname or IP address to be used in the request. */
+		.host = HTTPS_HOSTNAME,
+		/** Port number to be used in the request. */
+		.port = HTTPS_PORT,
+		/** The URL for this request, for example: /index.html */
+		.url = "/api/v1/devices/battery",
+		/** The HTTP header fields. Similar to the Zephyr HTTP client.
+		 *  This is a NULL-terminated list of header fields. May be NULL.
+		 */
+		.header_fields = NULL,
+		/** Payload/body, may be NULL. */
+		.body = msg_buffer,
+		/** User-defined timeout value for REST request. The timeout is set individually
+		 *  for socket connection creation and data transfer meaning REST request can take
+		 *  longer than this given timeout. To disable, set the timeout duration to SYS_FOREVER_MS.
+		 *  A value of zero will result in an immediate timeout.
+		 *  Default: CONFIG_REST_CLIENT_REST_REQUEST_TIMEOUT.
+		 */
+		.timeout_ms = 30000,
+		/** User-allocated buffer for receiving API response. */
+		.resp_buff = recv_buf,
+		/** User-defined size of resp_buff. */
+		.resp_buff_len = RECV_BUF_SIZE,
+	};
+	struct rest_client_resp_context resp_ctx;
+	memset(&resp_ctx, 0, sizeof(resp_ctx));
+
 	const int polling_interval = 60;
-	LOG_INF("Current lat,long %f, %f", last_latitude, last_longtitude);
-	k_sleep(K_SECONDS(polling_interval));
+	while (1)
+	{
+		LOG_INF("Do scheduled job ...");
+		cJSON* sensorDataObj = cJSON_CreateObject(); cJSON_AddItemToObject(sensorDataObj, "uuid", cJSON_CreateString("TestUUID"));
+		cJSON_AddItemToObject(sensorDataObj, "bat", cJSON_CreateNumber(1.0));
+		cJSON_PrintPreallocated(sensorDataObj, msg_buffer, sizeof(msg_buffer), false);
+		int err = -1;
+		req_ctx.url = ENDPOINT_BATTERY;
+		err = rest_client_request(&req_ctx, &resp_ctx);
+		if(err == 0)
+		{
+			LOG_INF("Put msg [%s] to endpoint \"%s\" succeeded", msg_buffer, req_ctx.url);
+		}
+		else
+		{
+			LOG_ERR("Put msg [%s] to endpoint \"%s\" failed with err %d", msg_buffer, req_ctx.url, err);
+			if(resp_ctx.response != NULL)
+			{
+				LOG_INF("Response: %s", resp_ctx.response);
+			}
+		}
+
+		memset(&resp_ctx, 0, sizeof(resp_ctx));
+
+		cJSON_DetachItemFromObject(sensorDataObj, "bat");
+		cJSON_AddItemToObject(sensorDataObj, "lat", cJSON_CreateNumber(last_latitude));
+		cJSON_AddItemToObject(sensorDataObj, "long", cJSON_CreateNumber(last_longtitude));
+		cJSON_PrintPreallocated(sensorDataObj, msg_buffer, sizeof(msg_buffer), false);
+		req_ctx.url = ENDPOINT_LOCATION;
+		err = rest_client_request(&req_ctx, &resp_ctx);
+		if(err == 0)
+		{
+			LOG_INF("Put msg [%s] to endpoint \"%s\" succeeded", msg_buffer, req_ctx.url);
+		}
+		else
+		{
+			LOG_ERR("Put msg [%s] to endpoint \"%s\" failed with err %d", msg_buffer, req_ctx.url, err);
+			if(resp_ctx.response != NULL)
+			{
+				LOG_INF("Response: %s", resp_ctx.response);
+			}
+		}
+		cJSON_Delete(sensorDataObj);
+
+		k_sleep(K_SECONDS(polling_interval));
+	}
 }
 
 void main(void)
@@ -288,54 +381,8 @@ void main(void)
 	}
 	LOG_INF("Connected");
 
-	struct rest_client_req_context req_ctx = {
-		/** Socket identifier for the connection. When using the default value,
-		 *  the library will open a new socket connection. Default: REST_CLIENT_SCKT_CONNECT.
-		 */
-		.connect_socket = fd,
-		/** Defines whether the connection should remain after API call. Default: false. */
-		.keep_alive = true,
-		/** Security tag. Default: REST_CLIENT_SEC_TAG_NO_SEC. */
-		.sec_tag = TLS_SEC_TAG,
-		/** Indicates the preference for peer verification.
-		 *  Initialize to REST_CLIENT_TLS_DEFAULT_PEER_VERIFY
-		 *  and the default (TLS_PEER_VERIFY_REQUIRED) is used.
-		 */
-		.tls_peer_verify = 0, // No build verification
-		/** Used HTTP method. */
-		.http_method = HTTP_PUT,
-		/** Hostname or IP address to be used in the request. */
-		.host = HTTPS_HOSTNAME,
-		/** Port number to be used in the request. */
-		.port = HTTPS_PORT,
-		/** The URL for this request, for example: /index.html */
-		.url = "/api/v1/devices/battery",
-		/** The HTTP header fields. Similar to the Zephyr HTTP client.
-		 *  This is a NULL-terminated list of header fields. May be NULL.
-		 */
-		.header_fields = NULL,
-		/** Payload/body, may be NULL. */
-		.body = NULL,
-		/** User-defined timeout value for REST request. The timeout is set individually
-		 *  for socket connection creation and data transfer meaning REST request can take
-		 *  longer than this given timeout. To disable, set the timeout duration to SYS_FOREVER_MS.
-		 *  A value of zero will result in an immediate timeout.
-		 *  Default: CONFIG_REST_CLIENT_REST_REQUEST_TIMEOUT.
-		 */
-		.timeout_ms = 30000,
-		/** User-allocated buffer for receiving API response. */
-		.resp_buff = recv_buf,
-		/** User-defined size of resp_buff. */
-		.resp_buff_len = RECV_BUF_SIZE,
-	};
-	struct rest_client_resp_context resp;
-	memset(&resp, 0, sizeof(resp));
-
 	create_gnss_thread();
-	while (true)	
-	{
-		app_main_handler(&req_ctx, &resp);
-	}
+	app_main_handler(fd);
 
 clean_up:
 	LOG_INF("Finished, closing socket.");
