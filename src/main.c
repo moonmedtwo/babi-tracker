@@ -154,18 +154,11 @@ void app_main_handler()
 
 void main(void)
 {
-	create_gnss_thread();
-	while (true)	
-	{
-		app_main_handler();
-	}
-
 	int err;
 	int fd;
 	char *p;
 	int bytes;
 	size_t off;
-	struct addrinfo *res = 0;
 
 	struct addrinfo hints = {
 		.ai_family = AF_INET,
@@ -198,17 +191,67 @@ void main(void)
 
 	printk("OK\n");
 
-	/* Setting google dns to resolve the hostname */
-	struct nrf_in_addr dns;
-	dns.s_addr = 134744072; // Google DNS, 8.8.8.8
-	const int dns_err = nrf_setdnsaddr(NRF_AF_INET, &dns, sizeof(dns));
-	printk("DNS set result %d\n", dns_err);
+	struct dns_server_lookup {
+		uint32_t addr;
+		uint8_t addr_u8[4];
+	};
 
-	/* Resolve the hostname into IP address */
-	printk("getaddrinfo of %s\n", HTTPS_HOSTNAME);
-	err = getaddrinfo(HTTPS_HOSTNAME, NULL, &hints, &res);
+	struct dns_server_lookup dns_servers[] =
+	{
+		// Google DNS primary
+		{
+			.addr = 134744072,
+			.addr_u8 = {8,8,8,8}
+		},
+		// Google DNS secondary
+		{
+			.addr = 134743044,
+			.addr_u8 = {8,8,4,4}
+		},
+		// OpenDNS primary
+		{
+			.addr = 3494108894,
+			.addr_u8 = {208,67,222,222}
+		},
+		// OpenDNS secondary
+		{
+			.addr = 3494108894,
+			.addr_u8 = {208,67,222,222}
+		},
+		{
+			.addr = 0,
+			.addr_u8 = {0,0,0,}
+		}
+	};
+
+	err = -1;
+	int dns_idx = 0;
+
+	struct addrinfo *res = 0;
+	while (err != 0 && dns_servers[dns_idx].addr != 0)
+	{
+		uint8_t * p_ipu8 = dns_servers[dns_idx].addr_u8;
+		printk("Resolving address using DNS server %d.%d.%d.%d\n", p_ipu8[0],  p_ipu8[1],  p_ipu8[2],  p_ipu8[3]);
+		/* Setting google dns to resolve the hostname */
+		struct nrf_in_addr dns;
+		// dns.s_addr = 134744072; // Google DNS primary, 8.8.8.8
+		// dns.s_addr = 134743044; // Google DNS secondary, 8.8.4.4
+		dns.s_addr = dns_servers[dns_idx].addr; // OpenDNS, 208.67.222.222
+		int dns_err = nrf_setdnsaddr(NRF_AF_INET, &dns, sizeof(dns));
+		printk("DNS set result %d\n", dns_err);
+
+		err = getaddrinfo(HTTPS_HOSTNAME, NULL, &hints, &res);
+		if (err == 0) {
+			break;
+		}
+			
+		printk("DNS server %d.%d.%d.%d failed with err %d\n", p_ipu8[0],  p_ipu8[1],  p_ipu8[2],  p_ipu8[3], err);
+		freeaddrinfo(res);
+		dns_idx++;
+	}
+
 	if (err) {
-		printk("getaddrinfo() of %s failed, err %d\n",HTTPS_HOSTNAME, errno);
+		printk("Resolving %s failed with all DNS servers\n",HTTPS_HOSTNAME);
 		return;
 	}
 
