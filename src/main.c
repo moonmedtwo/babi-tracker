@@ -15,6 +15,8 @@
 #include <net/rest_client.h>
 #include "commit_hash.h"
 
+LOG_MODULE_REGISTER(App, 3);
+
 #define HTTPS_PORT 443
 
 #define HTTPS_HOSTNAME "consumer-dev.itspersonalservices.com"
@@ -130,6 +132,9 @@ int tls_setup(int fd)
 	return 0;
 }
 
+extern volatile double last_latitude;
+extern volatile double last_longtitude;
+
 K_THREAD_STACK_DEFINE(stack_gnss, 4096);
 struct k_thread thread_data_gnss;
 #define THREAD_PRIORITY_GNSS 5
@@ -145,10 +150,10 @@ void create_gnss_thread()
                                  THREAD_PRIORITY_GNSS, 0, K_NO_WAIT);
 }
 
-void app_main_handler()
+void app_main_handler(struct rest_client_req_context * req_ctx, struct rest_client_resp_context *rsp_ctx)
 {
 	const int polling_interval = 60;
-	printk("Wake up every %d\n", polling_interval);
+	LOG_INF("Current lat,long %f, %f", last_latitude, last_longtitude);
 	k_sleep(K_SECONDS(polling_interval));
 }
 
@@ -175,7 +180,7 @@ void main(void)
 	}
 #endif
 
-	printk("Waiting for network.. ");
+	LOG_INF("Waiting for network...");
 	if (IS_ENABLED(CONFIG_LTE_AUTO_INIT_AND_CONNECT))
 	{
 		nrf_modem_at_printf("AT+COPS=1,2\"45202\"");
@@ -184,12 +189,12 @@ void main(void)
 	{
 		err = lte_lc_init_and_connect();
 		if (err) {
-			printk("Failed to connect to the LTE network, err %d\n", err);
+			LOG_INF("Failed to connect to the LTE network, err %d", err);
 			return;
 		}
 	}
 
-	printk("OK\n");
+	LOG_INF("LTE Connected");
 
 	struct dns_server_lookup {
 		uint32_t addr;
@@ -231,27 +236,27 @@ void main(void)
 	while (err != 0 && dns_servers[dns_idx].addr != 0)
 	{
 		uint8_t * p_ipu8 = dns_servers[dns_idx].addr_u8;
-		printk("Resolving address using DNS server %d.%d.%d.%d\n", p_ipu8[0],  p_ipu8[1],  p_ipu8[2],  p_ipu8[3]);
+		LOG_INF("Resolving %s using DNS server %d.%d.%d.%d", HTTPS_HOSTNAME, p_ipu8[0],  p_ipu8[1],  p_ipu8[2],  p_ipu8[3]);
 		/* Setting google dns to resolve the hostname */
 		struct nrf_in_addr dns;
 		// dns.s_addr = 134744072; // Google DNS primary, 8.8.8.8
 		// dns.s_addr = 134743044; // Google DNS secondary, 8.8.4.4
 		dns.s_addr = dns_servers[dns_idx].addr; // OpenDNS, 208.67.222.222
 		int dns_err = nrf_setdnsaddr(NRF_AF_INET, &dns, sizeof(dns));
-		printk("DNS set result %d\n", dns_err);
+		LOG_INF("DNS set result %d", dns_err);
 
 		err = getaddrinfo(HTTPS_HOSTNAME, NULL, &hints, &res);
 		if (err == 0) {
 			break;
 		}
 			
-		printk("DNS server %d.%d.%d.%d failed with err %d\n", p_ipu8[0],  p_ipu8[1],  p_ipu8[2],  p_ipu8[3], err);
+		LOG_INF("DNS server %d.%d.%d.%d failed with err %d", p_ipu8[0],  p_ipu8[1],  p_ipu8[2],  p_ipu8[3], err);
 		freeaddrinfo(res);
 		dns_idx++;
 	}
 
 	if (err) {
-		printk("Resolving %s failed with all DNS servers\n",HTTPS_HOSTNAME);
+		LOG_ERR("Resolving %s failed with all DNS servers\n",HTTPS_HOSTNAME);
 		return;
 	}
 
@@ -264,7 +269,7 @@ void main(void)
 		fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TLS_1_2);
 	}
 	if (fd == -1) {
-		printk("Failed to open socket!\n");
+		LOG_ERR("Failed to open socket!");
 		goto clean_up;
 	}
 
@@ -275,14 +280,13 @@ void main(void)
 	}
 
 	/* Connecting to the host with provided socket */
-	char* ip = &res->ai_addr->data[2];
-	printk("Connecting to %d.%d.%d.%d\n", ip[0], ip[1], ip[2], ip[3]);
+	LOG_INF("Connecting to %s", HTTPS_HOSTNAME);
 	err = connect(fd, res->ai_addr, sizeof(struct sockaddr_in));
 	if (err) {
-		printk("connect() failed, err: %d\n", errno);
+		LOG_ERR("connect() failed, err: %d", errno);
 		goto clean_up;
 	}
-	printk("Connected\n");
+	LOG_INF("Connected");
 
 	struct rest_client_req_context req_ctx = {
 		/** Socket identifier for the connection. When using the default value,
@@ -330,11 +334,11 @@ void main(void)
 	create_gnss_thread();
 	while (true)	
 	{
-		app_main_handler();
+		app_main_handler(&req_ctx, &resp);
 	}
 
 clean_up:
-	printk("Finished, closing socket.\n");
+	LOG_INF("Finished, closing socket.");
 	if (res != 0)
 	{
 		freeaddrinfo(res);
@@ -342,5 +346,5 @@ clean_up:
 	(void)close(fd);
 
 	lte_lc_power_off();
-	printk("Cleaned up, shutting down ...\n");
+	LOG_INF("Cleaned up, shutting down ...");
 }
