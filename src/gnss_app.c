@@ -202,8 +202,7 @@ static int gnss_init_and_start(void)
     /* Priotize GNSS to fix NRF_MODEM_GNSS_PVT_FLAG_NOT_ENOUGH_WINDOW_TIME */
     if (nrf_modem_gnss_prio_mode_enable() != 0)
     {
-		LOG_ERR("Failed to prioritize GNSS over LTE");
-        return -1;
+        LOG_ERR("Failed to prioritize GNSS over LTE");
     }
 
 	return 0;
@@ -348,6 +347,9 @@ void entrypoint_gnss(void *arg1, void *arg2, void *arg3)
 	}
 
 	fix_timestamp = k_uptime_get();
+    
+    unsigned insuffcient_time_window_cnt = 0;
+    bool gnss_prioritized = false;
 
 	for (;;) {
 		(void)k_poll(events, 2, K_FOREVER);
@@ -379,6 +381,20 @@ void entrypoint_gnss(void *arg1, void *arg2, void *arg3)
 				if (last_pvt.flags &
 				    NRF_MODEM_GNSS_PVT_FLAG_NOT_ENOUGH_WINDOW_TIME) {
 					printf("Insufficient GNSS time windows\n");
+                    insuffcient_time_window_cnt++;
+                    if(insuffcient_time_window_cnt >= 3)
+                    {
+                        printf("Priortizing GNSS over LTE\n");
+                        if (gnss_prioritized == false)
+                        {
+                            /* Priotize GNSS to fix NRF_MODEM_GNSS_PVT_FLAG_NOT_ENOUGH_WINDOW_TIME */
+                            if (nrf_modem_gnss_prio_mode_enable() != 0)
+                            {
+		                        LOG_ERR("Failed to prioritize GNSS over LTE");
+                            }
+                            gnss_prioritized = true;
+                        }
+                    }
 				}
 				if (last_pvt.flags & NRF_MODEM_GNSS_PVT_FLAG_SLEEP_BETWEEN_PVT) {
 					printf("Sleep period(s) between PVT notifications\n");
@@ -388,6 +404,8 @@ void entrypoint_gnss(void *arg1, void *arg2, void *arg3)
 				if (last_pvt.flags & NRF_MODEM_GNSS_PVT_FLAG_FIX_VALID) {
 					fix_timestamp = k_uptime_get();
 					print_fix_data(&last_pvt);
+                    insuffcient_time_window_cnt = 0;
+                    gnss_prioritized = false;
 				} else {
 					printf("Seconds since last fix: %d\n",
 					       (uint32_t)((k_uptime_get() - fix_timestamp) / 1000));
