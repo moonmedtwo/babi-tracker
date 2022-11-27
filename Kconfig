@@ -14,6 +14,35 @@ config SAMPLE_TFM_MBEDTLS
 
 endmenu
 
+choice
+	default GNSS_SAMPLE_ASSISTANCE_NONE
+	prompt "Select whether GNSS assistance is used or not"
+
+config GNSS_SAMPLE_ASSISTANCE_NONE
+	bool "Assistance not used"
+
+config GNSS_SAMPLE_ASSISTANCE_NRF_CLOUD
+	bool "Use nRF Cloud A-GPS or P-GPS"
+	select NRF_CLOUD_REST
+	imply NRF_CLOUD_AGPS
+	select MODEM_JWT
+	select MODEM_INFO
+	select DATE_TIME
+
+config GNSS_SAMPLE_ASSISTANCE_SUPL
+	bool "Use SUPL A-GPS"
+	select SUPL_CLIENT_LIB
+
+config GNSS_SAMPLE_ASSISTANCE_MINIMAL
+	bool "Use factory almanac, LTE network time and MCC based location"
+	select GNSS_SAMPLE_LTE_ON_DEMAND
+	select SETTINGS
+	select FCB
+	select FLASH
+	select FLASH_MAP
+
+endchoice
+
 menu "Zephyr Kernel"
 source "Kconfig.zephyr"
 endmenu

@@ -10,5 +10,8 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(https_client)
 
 # NORDIC SDK APP START
-target_sources(app PRIVATE src/main.c)
+target_sources(app PRIVATE src/main.c 
+            src/gnss_app.c 
+            src/assistance_minimal.c
+            src/mcc_location_table.c)
 # NORDIC SDK APP END

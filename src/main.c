@@ -130,18 +130,11 @@ int tls_setup(int fd)
 	return 0;
 }
 
-K_THREAD_STACK_DEFINE(stack_gnss, 1024);
+K_THREAD_STACK_DEFINE(stack_gnss, 4096);
 struct k_thread thread_data_gnss;
 #define THREAD_PRIORITY_GNSS 5
 
-void entrypoint_gnss(void *arg1, void *arg2, void *arg3)
-{
-	while(1)
-	{
-		printk("Running GNSS Thread\n");
-		k_sleep(K_SECONDS(10));
-	}
-}
+extern void entrypoint_gnss(void *arg1, void *arg2, void *arg3);
 
 void create_gnss_thread()
 {
@@ -152,8 +145,21 @@ void create_gnss_thread()
                                  THREAD_PRIORITY_GNSS, 0, K_NO_WAIT);
 }
 
+void app_main_handler()
+{
+	const int polling_interval = 60;
+	printk("Wake up every %d\n", polling_interval);
+	k_sleep(K_SECONDS(polling_interval));
+}
+
 void main(void)
 {
+	create_gnss_thread();
+	while (true)	
+	{
+		app_main_handler();
+	}
+
 	int err;
 	int fd;
 	char *p;
@@ -281,8 +287,7 @@ void main(void)
 	create_gnss_thread();
 	while (true)	
 	{
-		printk("Wake up every 10\n");
-		k_sleep(K_SECONDS(10));
+		app_main_handler();
 	}
 
 clean_up:
