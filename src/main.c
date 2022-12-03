@@ -32,7 +32,7 @@ static char recv_buf[RECV_BUF_SIZE];
 
 /* Certificate for `example.com` */
 static const char cert[] = {
-	#include "../cert/DigiCertGlobalRootCA.pem"
+    #include "../cert/DigiCertGlobalRootCA.pem"
 };
 
 BUILD_ASSERT(sizeof(cert) < KB(4), "Certificate too large");
@@ -40,100 +40,100 @@ BUILD_ASSERT(sizeof(cert) < KB(4), "Certificate too large");
 /* Provision certificate to modem */
 int cert_provision(void)
 {
-	int err;
-	bool exists;
-	int mismatch;
+    int err;
+    bool exists;
+    int mismatch;
 
-	/* It may be sufficient for you application to check whether the correct
-	 * certificate is provisioned with a given tag directly using modem_key_mgmt_cmp().
-	 * Here, for the sake of the completeness, we check that a certificate exists
-	 * before comparing it with what we expect it to be.
-	 */
-	err = modem_key_mgmt_exists(TLS_SEC_TAG, MODEM_KEY_MGMT_CRED_TYPE_CA_CHAIN, &exists);
-	if (err) {
-		printk("Failed to check for certificates err %d\n", err);
-		return err;
-	}
+    /* It may be sufficient for you application to check whether the correct
+     * certificate is provisioned with a given tag directly using modem_key_mgmt_cmp().
+     * Here, for the sake of the completeness, we check that a certificate exists
+     * before comparing it with what we expect it to be.
+     */
+    err = modem_key_mgmt_exists(TLS_SEC_TAG, MODEM_KEY_MGMT_CRED_TYPE_CA_CHAIN, &exists);
+    if (err) {
+        printk("Failed to check for certificates err %d\n", err);
+        return err;
+    }
 
-	if (exists) {
-		mismatch = modem_key_mgmt_cmp(TLS_SEC_TAG,
-					      MODEM_KEY_MGMT_CRED_TYPE_CA_CHAIN,
-					      cert, strlen(cert));
-		if (!mismatch) {
-			printk("Certificate match\n");
-			return 0;
-		}
+    if (exists) {
+        mismatch = modem_key_mgmt_cmp(TLS_SEC_TAG,
+                          MODEM_KEY_MGMT_CRED_TYPE_CA_CHAIN,
+                          cert, strlen(cert));
+        if (!mismatch) {
+            printk("Certificate match\n");
+            return 0;
+        }
 
-		printk("Certificate mismatch\n");
-		err = modem_key_mgmt_delete(TLS_SEC_TAG, MODEM_KEY_MGMT_CRED_TYPE_CA_CHAIN);
-		if (err) {
-			printk("Failed to delete existing certificate, err %d\n", err);
-		}
-	}
+        printk("Certificate mismatch\n");
+        err = modem_key_mgmt_delete(TLS_SEC_TAG, MODEM_KEY_MGMT_CRED_TYPE_CA_CHAIN);
+        if (err) {
+            printk("Failed to delete existing certificate, err %d\n", err);
+        }
+    }
 
-	printk("Provisioning certificate\n");
+    printk("Provisioning certificate\n");
 
-	/*  Provision certificate to the modem */
-	err = modem_key_mgmt_write(TLS_SEC_TAG,
-				   MODEM_KEY_MGMT_CRED_TYPE_CA_CHAIN,
-				   cert, sizeof(cert) - 1);
-	if (err) {
-		printk("Failed to provision certificate, err %d\n", err);
-		return err;
-	}
+    /*  Provision certificate to the modem */
+    err = modem_key_mgmt_write(TLS_SEC_TAG,
+                   MODEM_KEY_MGMT_CRED_TYPE_CA_CHAIN,
+                   cert, sizeof(cert) - 1);
+    if (err) {
+        printk("Failed to provision certificate, err %d\n", err);
+        return err;
+    }
 
-	return 0;
+    return 0;
 }
 
 /* Setup TLS options on a given socket */
 int tls_setup(int fd)
 {
-	int err;
-	int verify;
+    int err;
+    int verify;
 
-	/* Security tag that we have provisioned the certificate with */
-	const sec_tag_t tls_sec_tag[] = {
-		TLS_SEC_TAG,
-	};
+    /* Security tag that we have provisioned the certificate with */
+    const sec_tag_t tls_sec_tag[] = {
+        TLS_SEC_TAG,
+    };
 
 #if defined(CONFIG_SAMPLE_TFM_MBEDTLS)
-	err = tls_credential_add(tls_sec_tag[0], TLS_CREDENTIAL_CA_CERTIFICATE, cert, sizeof(cert));
-	if (err) {
-		return err;
-	}
+    err = tls_credential_add(tls_sec_tag[0], TLS_CREDENTIAL_CA_CERTIFICATE, cert, sizeof(cert));
+    if (err) {
+        return err;
+    }
 #endif
 
-	/* Set up TLS peer verification */
-	enum {
-		NONE = 0,
-		OPTIONAL = 1,
-		REQUIRED = 2,
-	};
+    /* Set up TLS peer verification */
+    enum {
+        NONE = 0,
+        OPTIONAL = 1,
+        REQUIRED = 2,
+    };
 
-	verify = NONE;
+    verify = NONE;
 
-	err = setsockopt(fd, SOL_TLS, TLS_PEER_VERIFY, &verify, sizeof(verify));
-	if (err) {
-		printk("Failed to setup peer verification, err %d\n", errno);
-		return err;
-	}
+    err = setsockopt(fd, SOL_TLS, TLS_PEER_VERIFY, &verify, sizeof(verify));
+    if (err) {
+        printk("Failed to setup peer verification, err %d\n", errno);
+        return err;
+    }
 
-	/* Associate the socket with the security tag
-	 * we have provisioned the certificate with.
-	 */
-	err = setsockopt(fd, SOL_TLS, TLS_SEC_TAG_LIST, tls_sec_tag,
-			 sizeof(tls_sec_tag));
-	if (err) {
-		printk("Failed to setup TLS sec tag, err %d\n", errno);
-		return err;
-	}
+    /* Associate the socket with the security tag
+     * we have provisioned the certificate with.
+     */
+    err = setsockopt(fd, SOL_TLS, TLS_SEC_TAG_LIST, tls_sec_tag,
+             sizeof(tls_sec_tag));
+    if (err) {
+        printk("Failed to setup TLS sec tag, err %d\n", errno);
+        return err;
+    }
 
-	err = setsockopt(fd, SOL_TLS, TLS_HOSTNAME, HTTPS_HOSTNAME, sizeof(HTTPS_HOSTNAME) - 1);
-	if (err) {
-		printk("Failed to setup TLS hostname, err %d\n", errno);
-		return err;
-	}
-	return 0;
+    err = setsockopt(fd, SOL_TLS, TLS_HOSTNAME, HTTPS_HOSTNAME, sizeof(HTTPS_HOSTNAME) - 1);
+    if (err) {
+        printk("Failed to setup TLS hostname, err %d\n", errno);
+        return err;
+    }
+    return 0;
 }
 
 extern volatile double last_latitude;
@@ -158,240 +158,250 @@ void create_gnss_thread()
 
 void app_main_handler(int socket)
 {
-	struct rest_client_req_context req_ctx = {
-		/** Socket identifier for the connection. When using the default value,
-		 *  the library will open a new socket connection. Default: REST_CLIENT_SCKT_CONNECT.
-		 */
-		.connect_socket = socket,
-		/** Defines whether the connection should remain after API call. Default: false. */
-		.keep_alive = true,
-		/** Security tag. Default: REST_CLIENT_SEC_TAG_NO_SEC. */
-		.sec_tag = TLS_SEC_TAG,
-		/** Indicates the preference for peer verification.
-		 *  Initialize to REST_CLIENT_TLS_DEFAULT_PEER_VERIFY
-		 *  and the default (TLS_PEER_VERIFY_REQUIRED) is used.
-		 */
-		.tls_peer_verify = 0, // No build verification
-		/** Used HTTP method. */
-		.http_method = HTTP_PUT,
-		/** Hostname or IP address to be used in the request. */
-		.host = HTTPS_HOSTNAME,
-		/** Port number to be used in the request. */
-		.port = HTTPS_PORT,
-		/** The URL for this request, for example: /index.html */
-		.url = "/api/v1/devices/battery",
-		/** The HTTP header fields. Similar to the Zephyr HTTP client.
-		 *  This is a NULL-terminated list of header fields. May be NULL.
-		 */
-		.header_fields = NULL,
-		/** Payload/body, may be NULL. */
-		.body = msg_buffer,
-		/** User-defined timeout value for REST request. The timeout is set individually
-		 *  for socket connection creation and data transfer meaning REST request can take
-		 *  longer than this given timeout. To disable, set the timeout duration to SYS_FOREVER_MS.
-		 *  A value of zero will result in an immediate timeout.
-		 *  Default: CONFIG_REST_CLIENT_REST_REQUEST_TIMEOUT.
-		 */
-		.timeout_ms = 30000,
-		/** User-allocated buffer for receiving API response. */
-		.resp_buff = recv_buf,
-		/** User-defined size of resp_buff. */
-		.resp_buff_len = RECV_BUF_SIZE,
-	};
-	struct rest_client_resp_context resp_ctx;
-	memset(&resp_ctx, 0, sizeof(resp_ctx));
+    struct rest_client_req_context req_ctx = {
+        /** Socket identifier for the connection. When using the default value,
+         *  the library will open a new socket connection. Default: REST_CLIENT_SCKT_CONNECT.
+         */
+        .connect_socket = socket,
+        /** Defines whether the connection should remain after API call. Default: false. */
+        .keep_alive = true,
+        /** Security tag. Default: REST_CLIENT_SEC_TAG_NO_SEC. */
+        .sec_tag = TLS_SEC_TAG,
+        /** Indicates the preference for peer verification.
+         *  Initialize to REST_CLIENT_TLS_DEFAULT_PEER_VERIFY
+         *  and the default (TLS_PEER_VERIFY_REQUIRED) is used.
+         */
+        .tls_peer_verify = 0, // No build verification
+        /** Used HTTP method. */
+        .http_method = HTTP_PUT,
+        /** Hostname or IP address to be used in the request. */
+        .host = HTTPS_HOSTNAME,
+        /** Port number to be used in the request. */
+        .port = HTTPS_PORT,
+        /** The URL for this request, for example: /index.html */
+        .url = "/api/v1/devices/battery",
+        /** The HTTP header fields. Similar to the Zephyr HTTP client.
+         *  This is a NULL-terminated list of header fields. May be NULL.
+         */
+        .header_fields = NULL,
+        /** Payload/body, may be NULL. */
+        .body = msg_buffer,
+        /** User-defined timeout value for REST request. The timeout is set individually
+         *  for socket connection creation and data transfer meaning REST request can take
+         *  longer than this given timeout. To disable, set the timeout duration to SYS_FOREVER_MS.
+         *  A value of zero will result in an immediate timeout.
+         *  Default: CONFIG_REST_CLIENT_REST_REQUEST_TIMEOUT.
+         */
+        .timeout_ms = 30000,
+        /** User-allocated buffer for receiving API response. */
+        .resp_buff = recv_buf,
+        /** User-defined size of resp_buff. */
+        .resp_buff_len = RECV_BUF_SIZE,
+    };
+    struct rest_client_resp_context resp_ctx;
+    memset(&resp_ctx, 0, sizeof(resp_ctx));
 
-	const int polling_interval = 60;
-	while (1)
-	{
-		LOG_INF("Do scheduled job ...");
-		cJSON* sensorDataObj = cJSON_CreateObject(); cJSON_AddItemToObject(sensorDataObj, "uuid", cJSON_CreateString("TestUUID"));
-		cJSON_AddItemToObject(sensorDataObj, "bat", cJSON_CreateNumber(1.0));
-		cJSON_PrintPreallocated(sensorDataObj, msg_buffer, sizeof(msg_buffer), false);
-		int err = -1;
-		req_ctx.url = ENDPOINT_BATTERY;
-		err = rest_client_request(&req_ctx, &resp_ctx);
-		if(err == 0)
-		{
-			LOG_INF("Put msg [%s] to endpoint \"%s\" succeeded", msg_buffer, req_ctx.url);
-		}
-		else
-		{
-			LOG_ERR("Put msg [%s] to endpoint \"%s\" failed with err %d", msg_buffer, req_ctx.url, err);
-			if(resp_ctx.response != NULL)
-			{
-				LOG_INF("Response: %s", resp_ctx.response);
-			}
-		}
+    const int polling_interval = 60;
+    while (1)
+    {
+        LOG_INF("Do scheduled job ...");
+        cJSON* sensorDataObj = cJSON_CreateObject(); cJSON_AddItemToObject(sensorDataObj, "uuid", cJSON_CreateString("TestUUID"));
+        cJSON_AddItemToObject(sensorDataObj, "bat", cJSON_CreateNumber(1.0));
+        cJSON_PrintPreallocated(sensorDataObj, msg_buffer, sizeof(msg_buffer), false);
+        int err = -1;
+        req_ctx.url = ENDPOINT_BATTERY;
+        err = rest_client_request(&req_ctx, &resp_ctx);
+        if(err == 0)
+        {
+            LOG_INF("Put msg [%s] to endpoint \"%s\" succeeded", msg_buffer, req_ctx.url);
+        }
+        else
+        {
+            LOG_ERR("Put msg [%s] to endpoint \"%s\" failed with err %d", msg_buffer, req_ctx.url, err);
+            if(resp_ctx.response != NULL)
+            {
+                LOG_INF("Response: %s", resp_ctx.response);
+            }
+        }
 
-		memset(&resp_ctx, 0, sizeof(resp_ctx));
+        memset(&resp_ctx, 0, sizeof(resp_ctx));
 
-		cJSON_DetachItemFromObject(sensorDataObj, "bat");
-		cJSON_AddItemToObject(sensorDataObj, "lat", cJSON_CreateNumber(last_latitude));
-		cJSON_AddItemToObject(sensorDataObj, "long", cJSON_CreateNumber(last_longtitude));
-		cJSON_PrintPreallocated(sensorDataObj, msg_buffer, sizeof(msg_buffer), false);
-		req_ctx.url = ENDPOINT_LOCATION;
-		err = rest_client_request(&req_ctx, &resp_ctx);
-		if(err == 0)
-		{
-			LOG_INF("Put msg [%s] to endpoint \"%s\" succeeded", msg_buffer, req_ctx.url);
-		}
-		else
-		{
-			LOG_ERR("Put msg [%s] to endpoint \"%s\" failed with err %d", msg_buffer, req_ctx.url, err);
-			if(resp_ctx.response != NULL)
-			{
-				LOG_INF("Response: %s", resp_ctx.response);
-			}
-		}
-		cJSON_Delete(sensorDataObj);
+        cJSON_DetachItemFromObject(sensorDataObj, "bat");
+        cJSON_AddItemToObject(sensorDataObj, "lat", cJSON_CreateNumber(last_latitude));
+        cJSON_AddItemToObject(sensorDataObj, "long", cJSON_CreateNumber(last_longtitude));
+        cJSON_PrintPreallocated(sensorDataObj, msg_buffer, sizeof(msg_buffer), false);
+        req_ctx.url = ENDPOINT_LOCATION;
+        err = rest_client_request(&req_ctx, &resp_ctx);
+        if(err == 0)
+        {
+            LOG_INF("Put msg [%s] to endpoint \"%s\" succeeded", msg_buffer, req_ctx.url);
+        }
+        else
+        {
+            LOG_ERR("Put msg [%s] to endpoint \"%s\" failed with err %d", msg_buffer, req_ctx.url, err);
+            if(resp_ctx.response != NULL)
+            {
+                LOG_INF("Response: %s", resp_ctx.response);
+            }
+        }
+        cJSON_Delete(sensorDataObj);
 
-		k_sleep(K_SECONDS(polling_interval));
-	}
+        k_sleep(K_SECONDS(polling_interval));
+    }
 }
 
 void main(void)
 {
-	int err;
-	int fd;
-	char *p;
-	int bytes;
-	size_t off;
+    int err;
+    int fd;
+    char *p;
+    int bytes;
+    size_t off;
 
-	struct addrinfo hints = {
-		.ai_family = AF_INET,
-		.ai_socktype = SOCK_STREAM,
-	};
+    struct addrinfo hints = {
+        .ai_family = AF_INET,
+        .ai_socktype = SOCK_STREAM,
+    };
 
-	printk("Build %s\n", HASH);
+    printk("Build %s\n", HASH);
 
 #if !defined(CONFIG_SAMPLE_TFM_MBEDTLS)
-	/* Provision certificates before connecting to the LTE network */
-	err = cert_provision();
-	if (err) {
-		return;
-	}
+    /* Provision certificates before connecting to the LTE network */
+    err = cert_provision();
+    if (err) {
+        return;
+    }
 #endif
 
-	LOG_INF("Waiting for network...");
-	if (IS_ENABLED(CONFIG_LTE_AUTO_INIT_AND_CONNECT))
-	{
-		nrf_modem_at_printf("AT+COPS=1,2\"45202\"");
-	}
-	else
-	{
-		err = lte_lc_init_and_connect();
-		if (err) {
-			LOG_INF("Failed to connect to the LTE network, err %d", err);
-			return;
-		}
-	}
+    LOG_INF("Waiting for network...");
+    if (IS_ENABLED(CONFIG_LTE_AUTO_INIT_AND_CONNECT))
+    {
+        nrf_modem_at_printf("AT+COPS=1,2\"45202\"");
+    }
+    else
+    {
+        if (lte_lc_init() != 0) {
+            LOG_ERR("Failed to initialize LTE link controller");
+            return -1;
+        }
 
-	LOG_INF("LTE Connected");
+        #if defined(CONFIG_GNSS_SAMPLE_LTE_ON_DEMAND)
+            lte_lc_register_handler(lte_lc_event_handler);
+        #elif !defined(CONFIG_GNSS_SAMPLE_ASSISTANCE_NONE)
+            lte_lc_psm_req(true);
 
-	struct dns_server_lookup {
-		uint32_t addr;
-		uint8_t addr_u8[4];
-	};
+        if (lte_lc_connect() != 0) {
+            LOG_ERR("Failed to connect to LTE network");
+            return -1;
+        }
+        #endif
+    }
 
-	struct dns_server_lookup dns_servers[] =
-	{
-		// Google DNS primary
-		{
-			.addr = 134744072,
-			.addr_u8 = {8,8,8,8}
-		},
-		// Google DNS secondary
-		{
-			.addr = 134743044,
-			.addr_u8 = {8,8,4,4}
-		},
-		// OpenDNS primary
-		{
-			.addr = 3494108894,
-			.addr_u8 = {208,67,222,222}
-		},
-		// OpenDNS secondary
-		{
-			.addr = 3494108894,
-			.addr_u8 = {208,67,222,222}
-		},
-		{
-			.addr = 0,
-			.addr_u8 = {0,0,0,}
-		}
-	};
+    LOG_INF("LTE Connected");
 
-	err = -1;
-	int dns_idx = 0;
+    struct dns_server_lookup {
+        uint32_t addr;
+        uint8_t addr_u8[4];
+    };
 
-	struct addrinfo *res = 0;
-	while (err != 0 && dns_servers[dns_idx].addr != 0)
-	{
-		uint8_t * p_ipu8 = dns_servers[dns_idx].addr_u8;
-		LOG_INF("Resolving %s using DNS server %d.%d.%d.%d", HTTPS_HOSTNAME, p_ipu8[0],  p_ipu8[1],  p_ipu8[2],  p_ipu8[3]);
-		/* Setting google dns to resolve the hostname */
-		struct nrf_in_addr dns;
-		// dns.s_addr = 134744072; // Google DNS primary, 8.8.8.8
-		// dns.s_addr = 134743044; // Google DNS secondary, 8.8.4.4
-		dns.s_addr = dns_servers[dns_idx].addr; // OpenDNS, 208.67.222.222
-		int dns_err = nrf_setdnsaddr(NRF_AF_INET, &dns, sizeof(dns));
-		LOG_INF("DNS set result %d", dns_err);
+    struct dns_server_lookup dns_servers[] =
+    {
+        // Google DNS primary
+        {
+            .addr = 134744072,
+            .addr_u8 = {8,8,8,8}
+        },
+        // Google DNS secondary
+        {
+            .addr = 134743044,
+            .addr_u8 = {8,8,4,4}
+        },
+        // OpenDNS primary
+        {
+            .addr = 3494108894,
+            .addr_u8 = {208,67,222,222}
+        },
+        // OpenDNS secondary
+        {
+            .addr = 3494108894,
+            .addr_u8 = {208,67,222,222}
+        },
+        {
+            .addr = 0,
+            .addr_u8 = {0,0,0,}
+        }
+    };
 
-		err = getaddrinfo(HTTPS_HOSTNAME, NULL, &hints, &res);
-		if (err == 0) {
-			break;
-		}
-			
-		LOG_INF("DNS server %d.%d.%d.%d failed with err %d", p_ipu8[0],  p_ipu8[1],  p_ipu8[2],  p_ipu8[3], err);
-		freeaddrinfo(res);
-		dns_idx++;
-	}
+    err = -1;
+    int dns_idx = 0;
 
-	if (err) {
-		LOG_ERR("Resolving %s failed with all DNS servers\n",HTTPS_HOSTNAME);
-		return;
-	}
+    struct addrinfo *res = 0;
+    while (err != 0 && dns_servers[dns_idx].addr != 0)
+    {
+        uint8_t * p_ipu8 = dns_servers[dns_idx].addr_u8;
+        LOG_INF("Resolving %s using DNS server %d.%d.%d.%d", HTTPS_HOSTNAME, p_ipu8[0],  p_ipu8[1],  p_ipu8[2],  p_ipu8[3]);
+        /* Setting google dns to resolve the hostname */
+        struct nrf_in_addr dns;
+        // dns.s_addr = 134744072; // Google DNS primary, 8.8.8.8
+        // dns.s_addr = 134743044; // Google DNS secondary, 8.8.4.4
+        dns.s_addr = dns_servers[dns_idx].addr; // OpenDNS, 208.67.222.222
+        int dns_err = nrf_setdnsaddr(NRF_AF_INET, &dns, sizeof(dns));
+        LOG_INF("DNS set result %d", dns_err);
 
-	((struct sockaddr_in *)res->ai_addr)->sin_port = htons(HTTPS_PORT);
-	
-	/* Try to open the socket with tls protocol enabled */
-	if (IS_ENABLED(CONFIG_SAMPLE_TFM_MBEDTLS)) {
-		fd = socket(AF_INET, SOCK_STREAM | SOCK_NATIVE_TLS, IPPROTO_TLS_1_2);
-	} else {
-		fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TLS_1_2);
-	}
-	if (fd == -1) {
-		LOG_ERR("Failed to open socket!");
-		goto clean_up;
-	}
+        err = getaddrinfo(HTTPS_HOSTNAME, NULL, &hints, &res);
+        if (err == 0) {
+            break;
+        }
+            
+        LOG_INF("DNS server %d.%d.%d.%d failed with err %d", p_ipu8[0],  p_ipu8[1],  p_ipu8[2],  p_ipu8[3], err);
+        freeaddrinfo(res);
+        dns_idx++;
+    }
 
-	/* Setup TLS socket options */
-	err = tls_setup(fd);
-	if (err) {
-		goto clean_up;
-	}
+    if (err) {
+        LOG_ERR("Resolving %s failed with all DNS servers\n",HTTPS_HOSTNAME);
+        return;
+    }
 
-	/* Connecting to the host with provided socket */
-	LOG_INF("Connecting to %s", HTTPS_HOSTNAME);
-	err = connect(fd, res->ai_addr, sizeof(struct sockaddr_in));
-	if (err) {
-		LOG_ERR("connect() failed, err: %d", errno);
-		goto clean_up;
-	}
-	LOG_INF("Connected");
+    ((struct sockaddr_in *)res->ai_addr)->sin_port = htons(HTTPS_PORT);
+    
+    /* Try to open the socket with tls protocol enabled */
+    if (IS_ENABLED(CONFIG_SAMPLE_TFM_MBEDTLS)) {
+        fd = socket(AF_INET, SOCK_STREAM | SOCK_NATIVE_TLS, IPPROTO_TLS_1_2);
+    } else {
+        fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TLS_1_2);
+    }
+    if (fd == -1) {
+        LOG_ERR("Failed to open socket!");
+        goto clean_up;
+    }
 
-	create_gnss_thread();
-	app_main_handler(fd);
+    /* Setup TLS socket options */
+    err = tls_setup(fd);
+    if (err) {
+        goto clean_up;
+    }
+
+    /* Connecting to the host with provided socket */
+    LOG_INF("Connecting to %s", HTTPS_HOSTNAME);
+    err = connect(fd, res->ai_addr, sizeof(struct sockaddr_in));
+    if (err) {
+        LOG_ERR("connect() failed, err: %d", errno);
+        goto clean_up;
+    }
+    LOG_INF("Connected");
+
+    create_gnss_thread();
+    app_main_handler(fd);
 
 clean_up:
-	LOG_INF("Finished, closing socket.");
-	if (res != 0)
-	{
-		freeaddrinfo(res);
-	}
-	(void)close(fd);
+    LOG_INF("Finished, closing socket.");
+    if (res != 0)
+    {
+        freeaddrinfo(res);
+    }
+    (void)close(fd);
 
-	lte_lc_power_off();
-	LOG_INF("Cleaned up, shutting down ...");
+    lte_lc_power_off();
+    LOG_INF("Cleaned up, shutting down ...");
 }
