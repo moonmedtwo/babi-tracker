@@ -213,7 +213,7 @@ static void location_inject(void)
 		return;
 	}
 
-	LOG_INF("Injected location for MCC %u", mcc);
+	LOG_INF("Injected location lat-long: [%.6f-%.6f] for MCC %u", mcc_info->lat, mcc_info->lon, mcc);
 }
 
 int assistance_init(struct k_work_q *assistance_work_q)

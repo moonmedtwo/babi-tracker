@@ -23,13 +23,13 @@ LOG_MODULE_REGISTER(App, 3);
 
 #define HTTPS_PORT 443
 
-// #define HTTPS_HOSTNAME "consumer-dev.itspersonalservices.com"
-#define HTTPS_HOSTNAME "google.com"
+#define HTTPS_HOSTNAME "consumer-dev.itspersonalservices.com"
 
 #define RECV_BUF_SIZE 2048
 #define TLS_SEC_TAG 42
 
 static char recv_buf[RECV_BUF_SIZE];
+static char DEV_UUID[40];
 
 /* Certificate for `example.com` */
 static const char cert[] = {
@@ -137,6 +137,69 @@ int tls_setup(int fd)
     return 0;
 }
 
+K_SEM_DEFINE(lte_ready, 0, 1);
+
+volatile bool lte_connected = false;
+
+static void lte_lc_event_handler(const struct lte_lc_evt *const evt)
+{
+	switch (evt->type) {
+	case LTE_LC_EVT_NW_REG_STATUS:
+		if ((evt->nw_reg_status == LTE_LC_NW_REG_REGISTERED_HOME) ||
+		    (evt->nw_reg_status == LTE_LC_NW_REG_REGISTERED_ROAMING)) {
+			LOG_INF("Connected to LTE network");
+            lte_connected = true;
+			k_sem_give(&lte_ready);
+		}
+		break;
+
+	default:
+		break;
+	}
+}
+
+void lte_connect(void)
+{
+    if (lte_connected == true)
+    {
+        return;
+    }
+
+	int err;
+
+	LOG_INF("Connecting to LTE network");
+
+	err = lte_lc_func_mode_set(LTE_LC_FUNC_MODE_ACTIVATE_LTE);
+	if (err) {
+		LOG_ERR("Failed to activate LTE, error: %d", err);
+		return;
+	}
+
+	if(k_sem_take(&lte_ready, K_SECONDS(10)) != 0)
+    {
+        LOG_ERR("Connecting timeout");
+    }
+    else
+    {
+	    /* Wait for a while, because with IPv4v6 PDN the IPv6 activation takes a bit more time. */
+	    k_sleep(K_SECONDS(1));
+    }
+}
+
+void lte_disconnect(void)
+{
+	int err;
+
+	err = lte_lc_func_mode_set(LTE_LC_FUNC_MODE_DEACTIVATE_LTE);
+	if (err) {
+		LOG_ERR("Failed to deactivate LTE, error: %d", err);
+		return;
+	}
+
+    lte_connected = false;
+	LOG_INF("LTE disconnected");
+}
+
 extern volatile double last_latitude;
 extern volatile double last_longtitude;
 
@@ -207,8 +270,7 @@ void app_main_handler(int socket)
     {
         LOG_INF("Do scheduled job ...");
 
-#if 0
-        cJSON* sensorDataObj = cJSON_CreateObject(); cJSON_AddItemToObject(sensorDataObj, "uuid", cJSON_CreateString("TestUUID"));
+        cJSON* sensorDataObj = cJSON_CreateObject(); cJSON_AddItemToObject(sensorDataObj, "uuid", cJSON_CreateString(DEV_UUID));
         cJSON_AddItemToObject(sensorDataObj, "bat", cJSON_CreateNumber(1.0));
         cJSON_PrintPreallocated(sensorDataObj, msg_buffer, sizeof(msg_buffer), false);
         int err = -1;
@@ -248,8 +310,6 @@ void app_main_handler(int socket)
             }
         }
         cJSON_Delete(sensorDataObj);
-#else
-#endif
         k_sleep(K_SECONDS(polling_interval));
     }
 }
@@ -289,19 +349,28 @@ void main(void)
             return -1;
         }
 
-        #if defined(CONFIG_GNSS_SAMPLE_LTE_ON_DEMAND)
-            lte_lc_register_handler(lte_lc_event_handler);
-        #elif !defined(CONFIG_GNSS_SAMPLE_ASSISTANCE_NONE)
-            lte_lc_psm_req(true);
-
-        if (lte_lc_connect() != 0) {
-            LOG_ERR("Failed to connect to LTE network");
-            return -1;
-        }
-        #endif
+        lte_lc_register_handler(lte_lc_event_handler);
+        lte_lc_psm_req(true);
     }
 
-    LOG_INF("LTE Connected");
+    int ret_scanf = nrf_modem_at_scanf("AT%XMODEMUUID", "%%XMODEMUUID: %s", &DEV_UUID);
+    if (ret_scanf != 1)
+    {
+        LOG_ERR("Failed to read device uuid");
+        return -1;
+    }
+    LOG_INF("Device uuid: %s", DEV_UUID);
+
+    create_gnss_thread();
+
+    while ((fabs(last_latitude - 0) < 0.5) 
+        && (fabs(last_longtitude - 0) < 0.5))
+    {
+        LOG_INF("Waiting for first GPS fix ...");
+        k_sleep(K_SECONDS(10));
+    }
+
+    lte_connect();
 
     struct dns_server_lookup {
         uint32_t addr;
@@ -395,7 +464,6 @@ void main(void)
     }
     LOG_INF("Connected");
 
-    create_gnss_thread();
     app_main_handler(fd);
 
 clean_up:
