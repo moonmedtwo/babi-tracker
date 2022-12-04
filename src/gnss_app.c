@@ -38,6 +38,8 @@ static struct k_poll_event events[2] = {
                     &nmea_queue, 0),
 };
 
+extern void lte_connect(void);
+extern void lte_disconnect(void);
 
 /* GNSS Assitance work queue */
 static struct k_work_q gnss_work_q;
@@ -70,10 +72,12 @@ static void agps_data_get_work_fn(struct k_work *item)
         last_agps.sv_mask_alm,
         last_agps.data_flags);
 
+    lte_connect();
     err = assistance_request(&last_agps);
     if (err) {
         LOG_ERR("Failed to request assistance data");
     }
+    lte_disconnect();
 
     requesting_assistance = false;
 }
@@ -224,12 +228,31 @@ static bool output_paused(void)
     return (requesting_assistance || assistance_is_active()) ? true : false;
 }
 
+static void print_satellite_stats(struct nrf_modem_gnss_pvt_data_frame *pvt_data)
+{
+	uint8_t tracked   = 0;
+	uint8_t in_fix    = 0;
+	uint8_t unhealthy = 0;
+
+	for (int i = 0; i < NRF_MODEM_GNSS_MAX_SATELLITES; ++i) {
+		if (pvt_data->sv[i].sv > 0) {
+			tracked++;
+
+			if (pvt_data->sv[i].flags & NRF_MODEM_GNSS_SV_FLAG_USED_IN_FIX) {
+				in_fix++;
+			}
+
+			if (pvt_data->sv[i].flags & NRF_MODEM_GNSS_SV_FLAG_UNHEALTHY) {
+				unhealthy++;
+			}
+		}
+	}
+
+	LOG_INF("\tTracking: %2d Using: %2d Unhealthy: %d", tracked, in_fix, unhealthy);
+}
+
 void entrypoint_gnss(void *arg1, void *arg2, void *arg3)
 {
-#if FAKE_GNSS_DATA
-    last_latitude = 10.7804839;
-    last_longtitude = 106.6934053;
-#else WIP
     uint8_t cnt = 0;
     struct nrf_modem_gnss_nmea_data_frame *nmea_data;
 
@@ -250,8 +273,11 @@ void entrypoint_gnss(void *arg1, void *arg2, void *arg3)
 
     while (1) {
         (void)k_poll(events, 2, K_FOREVER);
+        LOG_INF("GNSS Event");
 
         if (events[0].state == K_POLL_STATE_SEM_AVAILABLE && k_sem_take(events[0].sem, K_NO_WAIT) == 0) {
+            LOG_INF("\tevents[0] last_pvt.flags: %02x", last_pvt.flags);
+            print_satellite_stats(&last_pvt);
             if (last_pvt.flags & NRF_MODEM_GNSS_PVT_FLAG_DEADLINE_MISSED) {
             }
             if (last_pvt.flags & NRF_MODEM_GNSS_PVT_FLAG_NOT_ENOUGH_WINDOW_TIME) {
@@ -279,10 +305,13 @@ void entrypoint_gnss(void *arg1, void *arg2, void *arg3)
                 fix_timestamp = k_uptime_get();
                 insuffcient_time_window_cnt = 0;
                 gnss_prioritized = false;
+                last_latitude = last_pvt.latitude;
+                last_longtitude = last_pvt.longitude;
             } 
         }
 
         if (events[1].state == K_POLL_STATE_MSGQ_DATA_AVAILABLE && k_msgq_get(events[1].msgq, &nmea_data, K_NO_WAIT) == 0) {
+            LOG_INF("\tevents[1]", last_pvt.flags);
             /* New NMEA data available */
             k_free(nmea_data);
         }
@@ -290,7 +319,6 @@ void entrypoint_gnss(void *arg1, void *arg2, void *arg3)
         events[0].state = K_POLL_STATE_NOT_READY;
         events[1].state = K_POLL_STATE_NOT_READY; 
     }
-#endif // WIP
 
     return 0;
 }
