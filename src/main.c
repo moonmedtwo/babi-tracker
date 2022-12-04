@@ -29,6 +29,7 @@ LOG_MODULE_REGISTER(App, 3);
 #define TLS_SEC_TAG 42
 
 static char recv_buf[RECV_BUF_SIZE];
+static char DEV_UUID[40];
 
 /* Certificate for `example.com` */
 static const char cert[] = {
@@ -269,7 +270,7 @@ void app_main_handler(int socket)
     {
         LOG_INF("Do scheduled job ...");
 
-        cJSON* sensorDataObj = cJSON_CreateObject(); cJSON_AddItemToObject(sensorDataObj, "uuid", cJSON_CreateString("TestUUID"));
+        cJSON* sensorDataObj = cJSON_CreateObject(); cJSON_AddItemToObject(sensorDataObj, "uuid", cJSON_CreateString(DEV_UUID));
         cJSON_AddItemToObject(sensorDataObj, "bat", cJSON_CreateNumber(1.0));
         cJSON_PrintPreallocated(sensorDataObj, msg_buffer, sizeof(msg_buffer), false);
         int err = -1;
@@ -352,6 +353,14 @@ void main(void)
         lte_lc_psm_req(true);
     }
 
+    int ret_scanf = nrf_modem_at_scanf("AT%XMODEMUUID", "%%XMODEMUUID: %s", &DEV_UUID);
+    if (ret_scanf != 1)
+    {
+        LOG_ERR("Failed to read device uuid");
+        return -1;
+    }
+    LOG_INF("Device uuid: %s", DEV_UUID);
+
     create_gnss_thread();
 
     while ((fabs(last_latitude - 0) < 0.5) 
@@ -360,6 +369,7 @@ void main(void)
         LOG_INF("Waiting for first GPS fix ...");
         k_sleep(K_SECONDS(10));
     }
+
     lte_connect();
 
     struct dns_server_lookup {
