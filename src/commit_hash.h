@@ -1,4 +1,4 @@
 #ifndef _COMMIT_HASH_
 #define _COMMIT_HASH_
-#define HASH "INIT"
+#define HASH "LTE + GNSS Demo"
 #endif
