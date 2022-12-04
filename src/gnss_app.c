@@ -214,55 +214,9 @@ static int gnss_init_and_start(void)
     return 0;
 }
 
-static void print_fix_data(struct nrf_modem_gnss_pvt_data_frame *pvt_data)
-{
-    printf("Latitude:       %.06f\n", pvt_data->latitude);
-    printf("Longitude:      %.06f\n", pvt_data->longitude);
-    printf("Altitude:       %.01f m\n", pvt_data->altitude);
-    printf("Accuracy:       %.01f m\n", pvt_data->accuracy);
-    printf("Speed:          %.01f m/s\n", pvt_data->speed);
-    printf("Speed accuracy: %.01f m/s\n", pvt_data->speed_accuracy);
-    printf("Heading:        %.01f deg\n", pvt_data->heading);
-    printf("Date:           %04u-%02u-%02u\n",
-           pvt_data->datetime.year,
-           pvt_data->datetime.month,
-           pvt_data->datetime.day);
-    printf("Time (UTC):     %02u:%02u:%02u.%03u\n",
-           pvt_data->datetime.hour,
-           pvt_data->datetime.minute,
-           pvt_data->datetime.seconds,
-           pvt_data->datetime.ms);
-    printf("PDOP:           %.01f\n", pvt_data->pdop);
-    printf("HDOP:           %.01f\n", pvt_data->hdop);
-    printf("VDOP:           %.01f\n", pvt_data->vdop);
-    printf("TDOP:           %.01f\n", pvt_data->tdop);
-}
-
 static void date_time_evt_handler(const struct date_time_evt *evt)
 {
     k_sem_give(&time_sem);
-}
-
-static int modem_init(void)
-{
-    if (IS_ENABLED(CONFIG_DATE_TIME)) {
-        date_time_register_handler(date_time_evt_handler);
-    }
-
-    lte_lc_psm_req(true);
-
-    if (IS_ENABLED(CONFIG_DATE_TIME)) {
-        LOG_INF("Waiting for current time");
-
-        /* Wait for an event from the Date Time library. */
-        k_sem_take(&time_sem, K_MINUTES(10));
-
-        if (!date_time_is_valid()) {
-            LOG_WRN("Failed to get current time, continuing anyway");
-        }
-    }
-
-    return 0;
 }
 
 static bool output_paused(void)
@@ -270,35 +224,12 @@ static bool output_paused(void)
     return (requesting_assistance || assistance_is_active()) ? true : false;
 }
 
-static void print_satellite_stats(struct nrf_modem_gnss_pvt_data_frame *pvt_data)
-{
-    uint8_t tracked   = 0;
-    uint8_t in_fix    = 0;
-    uint8_t unhealthy = 0;
-
-    for (int i = 0; i < NRF_MODEM_GNSS_MAX_SATELLITES; ++i) {
-        if (pvt_data->sv[i].sv > 0) {
-            tracked++;
-
-            if (pvt_data->sv[i].flags & NRF_MODEM_GNSS_SV_FLAG_USED_IN_FIX) {
-                in_fix++;
-            }
-
-            if (pvt_data->sv[i].flags & NRF_MODEM_GNSS_SV_FLAG_UNHEALTHY) {
-                unhealthy++;
-            }
-        }
-    }
-
-    printf("Tracking: %2d Using: %2d Unhealthy: %d\n", tracked, in_fix, unhealthy);
-}
-
 void entrypoint_gnss(void *arg1, void *arg2, void *arg3)
 {
 #if FAKE_GNSS_DATA
     last_latitude = 10.7804839;
     last_longtitude = 106.6934053;
-#elif WIP
+#else WIP
     uint8_t cnt = 0;
     struct nrf_modem_gnss_nmea_data_frame *nmea_data;
 
@@ -359,113 +290,7 @@ void entrypoint_gnss(void *arg1, void *arg2, void *arg3)
         events[0].state = K_POLL_STATE_NOT_READY;
         events[1].state = K_POLL_STATE_NOT_READY; 
     }
-#else
-    uint8_t cnt = 0;
-    struct nrf_modem_gnss_nmea_data_frame *nmea_data;
-
-    LOG_INF("Starting GNSS sample");
-
-    // TODO solve this
-    if (modem_init() != 0) {
-        LOG_ERR("Failed to initialize modem");
-        return -1;
-    }
-
-    if (sample_init() != 0) {
-        LOG_ERR("Failed to initialize sample");
-        return -1;
-    }
-
-    if (gnss_init_and_start() != 0) {
-        LOG_ERR("Failed to initialize and start GNSS");
-        return -1;
-    }
-
-    fix_timestamp = k_uptime_get();
-    
-    unsigned insuffcient_time_window_cnt = 0;
-    bool gnss_prioritized = false;
-
-    for (;;) {
-        (void)k_poll(events, 2, K_FOREVER);
-
-        if (events[0].state == K_POLL_STATE_SEM_AVAILABLE && k_sem_take(events[0].sem, K_NO_WAIT) == 0) {
-            /* New PVT data available */
-
-            if (IS_ENABLED(CONFIG_GNSS_SAMPLE_NMEA_ONLY)) {
-                /* NMEA-only output mode. */
-
-                if (output_paused()) {
-                    goto handle_nmea;
-                }
-
-            } else {
-                /* PVT and NMEA output mode. */
-
-                if (output_paused()) {
-                    goto handle_nmea;
-                }
-
-                printf("\033[1;1H");
-                printf("\033[2J");
-                print_satellite_stats(&last_pvt);
-
-                if (last_pvt.flags & NRF_MODEM_GNSS_PVT_FLAG_DEADLINE_MISSED) {
-                    printf("GNSS operation blocked by LTE\n");
-                }
-                if (last_pvt.flags &
-                    NRF_MODEM_GNSS_PVT_FLAG_NOT_ENOUGH_WINDOW_TIME) {
-                    printf("Insufficient GNSS time windows\n");
-                    insuffcient_time_window_cnt++;
-                    if(insuffcient_time_window_cnt >= 3)
-                    {
-                        printf("Priortizing GNSS over LTE\n");
-                        if (gnss_prioritized == false)
-                        {
-                            /* Priotize GNSS to fix NRF_MODEM_GNSS_PVT_FLAG_NOT_ENOUGH_WINDOW_TIME */
-                            if (nrf_modem_gnss_prio_mode_enable() != 0)
-                            {
-                                LOG_ERR("Failed to prioritize GNSS over LTE");
-                            }
-                            gnss_prioritized = true;
-                        }
-                    }
-                }
-                if (last_pvt.flags & NRF_MODEM_GNSS_PVT_FLAG_SLEEP_BETWEEN_PVT) {
-                    printf("Sleep period(s) between PVT notifications\n");
-                }
-                printf("-----------------------------------\n");
-
-                if (last_pvt.flags & NRF_MODEM_GNSS_PVT_FLAG_FIX_VALID) {
-                    fix_timestamp = k_uptime_get();
-                    print_fix_data(&last_pvt);
-                    insuffcient_time_window_cnt = 0;
-                    gnss_prioritized = false;
-                } else {
-                    printf("Seconds since last fix: %d\n",
-                           (uint32_t)((k_uptime_get() - fix_timestamp) / 1000));
-                    cnt++;
-                    printf("Searching [%c]\n", update_indicator[cnt%4]);
-                }
-
-                printf("\nNMEA strings:\n\n");
-            }
-        }
-
-handle_nmea:
-        if (events[1].state == K_POLL_STATE_MSGQ_DATA_AVAILABLE && k_msgq_get(events[1].msgq, &nmea_data, K_NO_WAIT) == 0) {
-            /* New NMEA data available */
-
-            if (!output_paused()) {
-                printf("%s", nmea_data->nmea_str);
-            }
-            k_free(nmea_data);
-        }
-
-        events[0].state = K_POLL_STATE_NOT_READY;
-        events[1].state = K_POLL_STATE_NOT_READY;
-    }
-#endif
+#endif // WIP
 
     return 0;
 }
