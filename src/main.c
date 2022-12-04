@@ -23,7 +23,8 @@ LOG_MODULE_REGISTER(App, 3);
 
 #define HTTPS_PORT 443
 
-#define HTTPS_HOSTNAME "consumer-dev.itspersonalservices.com"
+// #define HTTPS_HOSTNAME "consumer-dev.itspersonalservices.com"
+#define HTTPS_HOSTNAME "google.com"
 
 #define RECV_BUF_SIZE 2048
 #define TLS_SEC_TAG 42
@@ -205,6 +206,8 @@ void app_main_handler(int socket)
     while (1)
     {
         LOG_INF("Do scheduled job ...");
+
+#if 0
         cJSON* sensorDataObj = cJSON_CreateObject(); cJSON_AddItemToObject(sensorDataObj, "uuid", cJSON_CreateString("TestUUID"));
         cJSON_AddItemToObject(sensorDataObj, "bat", cJSON_CreateNumber(1.0));
         cJSON_PrintPreallocated(sensorDataObj, msg_buffer, sizeof(msg_buffer), false);
@@ -245,7 +248,8 @@ void app_main_handler(int socket)
             }
         }
         cJSON_Delete(sensorDataObj);
-
+#else
+#endif
         k_sleep(K_SECONDS(polling_interval));
     }
 }
