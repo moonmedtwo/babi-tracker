@@ -1,0 +1,13 @@
+# Target labels
+ tfm
+# Source files and their labels
+/workdir/project/build_circuitdojo_feather_nrf9160_ns/modules/trusted-firmware-m/CMakeFiles/tfm
+/workdir/project/build_circuitdojo_feather_nrf9160_ns/modules/trusted-firmware-m/CMakeFiles/tfm.rule
+/workdir/project/build_circuitdojo_feather_nrf9160_ns/modules/trusted-firmware-m/CMakeFiles/tfm-complete.rule
+/workdir/project/build_circuitdojo_feather_nrf9160_ns/modules/trusted-firmware-m/tfm-prefix/src/tfm-stamp/tfm-build.rule
+/workdir/project/build_circuitdojo_feather_nrf9160_ns/modules/trusted-firmware-m/tfm-prefix/src/tfm-stamp/tfm-configure.rule
+/workdir/project/build_circuitdojo_feather_nrf9160_ns/modules/trusted-firmware-m/tfm-prefix/src/tfm-stamp/tfm-download.rule
+/workdir/project/build_circuitdojo_feather_nrf9160_ns/modules/trusted-firmware-m/tfm-prefix/src/tfm-stamp/tfm-install.rule
+/workdir/project/build_circuitdojo_feather_nrf9160_ns/modules/trusted-firmware-m/tfm-prefix/src/tfm-stamp/tfm-mkdir.rule
+/workdir/project/build_circuitdojo_feather_nrf9160_ns/modules/trusted-firmware-m/tfm-prefix/src/tfm-stamp/tfm-patch.rule
+/workdir/project/build_circuitdojo_feather_nrf9160_ns/modules/trusted-firmware-m/tfm-prefix/src/tfm-stamp/tfm-update.rule

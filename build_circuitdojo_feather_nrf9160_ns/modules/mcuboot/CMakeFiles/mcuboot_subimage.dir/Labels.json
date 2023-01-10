@@ -1,0 +1,43 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "/workdir/project/build_circuitdojo_feather_nrf9160_ns/modules/mcuboot/CMakeFiles/mcuboot_subimage"
+		},
+		{
+			"file" : "/workdir/project/build_circuitdojo_feather_nrf9160_ns/modules/mcuboot/CMakeFiles/mcuboot_subimage.rule"
+		},
+		{
+			"file" : "/workdir/project/build_circuitdojo_feather_nrf9160_ns/modules/mcuboot/CMakeFiles/mcuboot_subimage-complete.rule"
+		},
+		{
+			"file" : "/workdir/project/build_circuitdojo_feather_nrf9160_ns/modules/mcuboot/mcuboot_subimage-prefix/src/mcuboot_subimage-stamp/mcuboot_subimage-build.rule"
+		},
+		{
+			"file" : "/workdir/project/build_circuitdojo_feather_nrf9160_ns/modules/mcuboot/mcuboot_subimage-prefix/src/mcuboot_subimage-stamp/mcuboot_subimage-configure.rule"
+		},
+		{
+			"file" : "/workdir/project/build_circuitdojo_feather_nrf9160_ns/modules/mcuboot/mcuboot_subimage-prefix/src/mcuboot_subimage-stamp/mcuboot_subimage-download.rule"
+		},
+		{
+			"file" : "/workdir/project/build_circuitdojo_feather_nrf9160_ns/modules/mcuboot/mcuboot_subimage-prefix/src/mcuboot_subimage-stamp/mcuboot_subimage-install.rule"
+		},
+		{
+			"file" : "/workdir/project/build_circuitdojo_feather_nrf9160_ns/modules/mcuboot/mcuboot_subimage-prefix/src/mcuboot_subimage-stamp/mcuboot_subimage-mkdir.rule"
+		},
+		{
+			"file" : "/workdir/project/build_circuitdojo_feather_nrf9160_ns/modules/mcuboot/mcuboot_subimage-prefix/src/mcuboot_subimage-stamp/mcuboot_subimage-patch.rule"
+		},
+		{
+			"file" : "/workdir/project/build_circuitdojo_feather_nrf9160_ns/modules/mcuboot/mcuboot_subimage-prefix/src/mcuboot_subimage-stamp/mcuboot_subimage-update.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"mcuboot_subimage"
+		],
+		"name" : "mcuboot_subimage"
+	}
+}

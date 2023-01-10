@@ -1,0 +1,25 @@
+{
+    "format-version": 0,
+    "time": 1673341909,
+    "files": [
+        {
+            "load_address": 115200,
+            "version_MCUBOOT": "0.0.0+0",
+            "type": "application",
+            "board": "circuitdojo_feather_nrf9160",
+            "soc": "nRF9160_SICA",
+            "size": 174475,
+            "file": "app_update.bin",
+            "modtime": 1673341909
+        }
+    ],
+    "name": "project",
+    "firmware": {
+        "zephyr": {
+            "revision": "65a99697fa604e28cb26ec96ce935ad720222892-dirty"
+        },
+        "nrf": {
+            "revision": "eb44e0e60f559f4a99fda13afd3f64045e043e5c-dirty"
+        }
+    }
+}
