@@ -30,6 +30,7 @@ LOG_MODULE_REGISTER(App, 3);
 
 static char recv_buf[RECV_BUF_SIZE];
 static char DEV_UUID[40];
+static char MODEM_FW_VER[50];
 
 /* Certificate for `example.com` */
 static const char cert[] = {
@@ -327,7 +328,15 @@ void main(void)
         .ai_socktype = SOCK_STREAM,
     };
 
-    printk("Build %s\n", HASH);
+    LOG_INF("Its Personal Build %s", HASH);
+    LOG_INF("Using APN: %s", CONFIG_PDN_DEFAULT_APN);
+    int ret_scanf = nrf_modem_at_scanf("AT+CGMR", "%s", &MODEM_FW_VER);
+    if (ret_scanf != 1)
+    {
+        LOG_ERR("Failed to read modem firmware version");
+        return -1;
+    }
+    LOG_INF("Modem firmware %s", &MODEM_FW_VER);
 
 #if !defined(CONFIG_SAMPLE_TFM_MBEDTLS)
     /* Provision certificates before connecting to the LTE network */
@@ -340,6 +349,7 @@ void main(void)
     LOG_INF("Waiting for network...");
     if (IS_ENABLED(CONFIG_LTE_AUTO_INIT_AND_CONNECT))
     {
+        LOG_INF("Enabled CONFIG_PDN_DEFAULT_APN");
         nrf_modem_at_printf("AT+COPS=1,2\"45202\"");
     }
     else
@@ -353,7 +363,7 @@ void main(void)
         lte_lc_psm_req(true);
     }
 
-    int ret_scanf = nrf_modem_at_scanf("AT%XMODEMUUID", "%%XMODEMUUID: %s", &DEV_UUID);
+    ret_scanf = nrf_modem_at_scanf("AT%XMODEMUUID", "%%XMODEMUUID: %s", &DEV_UUID);
     if (ret_scanf != 1)
     {
         LOG_ERR("Failed to read device uuid");
