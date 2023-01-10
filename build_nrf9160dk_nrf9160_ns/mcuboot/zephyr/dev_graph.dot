@@ -1,0 +1,8 @@
+// /workdir/project/build_nrf9160dk_nrf9160_ns/mcuboot/zephyr/zephyr_pre0.elf
+digraph "Device dependency graph" {
+	69 [label="clock@5000\nOrdinal: 69 | Handle: 1\n/soc/peripheral@50000000/clock@5000"]
+	9 [label="gpio@842500\nOrdinal: 9 | Handle: 2\n/soc/peripheral@50000000/gpio@842500"]
+	100 [label="uart@9000\nOrdinal: 100 | Handle: 3\n/soc/peripheral@50000000/uart@9000"]
+	99 [label="uart@8000\nOrdinal: 99 | Handle: 4\n/soc/peripheral@50000000/uart@8000"]
+	105 [label="flash-controller@39000\nOrdinal: 105 | Handle: 5\n/soc/peripheral@50000000/flash-controller@39000"]
+}

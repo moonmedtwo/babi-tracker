@@ -1,0 +1,13 @@
+# Target labels
+ mcuboot_subimage
+# Source files and their labels
+/workdir/project/build_nrf9160dk_nrf9160_ns/modules/mcuboot/CMakeFiles/mcuboot_subimage
+/workdir/project/build_nrf9160dk_nrf9160_ns/modules/mcuboot/CMakeFiles/mcuboot_subimage.rule
+/workdir/project/build_nrf9160dk_nrf9160_ns/modules/mcuboot/CMakeFiles/mcuboot_subimage-complete.rule
+/workdir/project/build_nrf9160dk_nrf9160_ns/modules/mcuboot/mcuboot_subimage-prefix/src/mcuboot_subimage-stamp/mcuboot_subimage-build.rule
+/workdir/project/build_nrf9160dk_nrf9160_ns/modules/mcuboot/mcuboot_subimage-prefix/src/mcuboot_subimage-stamp/mcuboot_subimage-configure.rule
+/workdir/project/build_nrf9160dk_nrf9160_ns/modules/mcuboot/mcuboot_subimage-prefix/src/mcuboot_subimage-stamp/mcuboot_subimage-download.rule
+/workdir/project/build_nrf9160dk_nrf9160_ns/modules/mcuboot/mcuboot_subimage-prefix/src/mcuboot_subimage-stamp/mcuboot_subimage-install.rule
+/workdir/project/build_nrf9160dk_nrf9160_ns/modules/mcuboot/mcuboot_subimage-prefix/src/mcuboot_subimage-stamp/mcuboot_subimage-mkdir.rule
+/workdir/project/build_nrf9160dk_nrf9160_ns/modules/mcuboot/mcuboot_subimage-prefix/src/mcuboot_subimage-stamp/mcuboot_subimage-patch.rule
+/workdir/project/build_nrf9160dk_nrf9160_ns/modules/mcuboot/mcuboot_subimage-prefix/src/mcuboot_subimage-stamp/mcuboot_subimage-update.rule
