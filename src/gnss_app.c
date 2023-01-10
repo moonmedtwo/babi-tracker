@@ -273,11 +273,11 @@ void entrypoint_gnss(void *arg1, void *arg2, void *arg3)
 
     while (1) {
         (void)k_poll(events, 2, K_FOREVER);
-        LOG_INF("GNSS Event");
+        // LOG_INF("GNSS Event");
 
         if (events[0].state == K_POLL_STATE_SEM_AVAILABLE && k_sem_take(events[0].sem, K_NO_WAIT) == 0) {
-            LOG_INF("\tevents[0] last_pvt.flags: %02x", last_pvt.flags);
-            print_satellite_stats(&last_pvt);
+            // LOG_INF("\tevents[0] last_pvt.flags: %02x", last_pvt.flags);
+            // print_satellite_stats(&last_pvt);
             if (last_pvt.flags & NRF_MODEM_GNSS_PVT_FLAG_DEADLINE_MISSED) {
             }
             if (last_pvt.flags & NRF_MODEM_GNSS_PVT_FLAG_NOT_ENOUGH_WINDOW_TIME) {
@@ -311,7 +311,7 @@ void entrypoint_gnss(void *arg1, void *arg2, void *arg3)
         }
 
         if (events[1].state == K_POLL_STATE_MSGQ_DATA_AVAILABLE && k_msgq_get(events[1].msgq, &nmea_data, K_NO_WAIT) == 0) {
-            LOG_INF("\tevents[1]", last_pvt.flags);
+            // LOG_INF("\tevents[1]", last_pvt.flags);
             /* New NMEA data available */
             k_free(nmea_data);
         }
